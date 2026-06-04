@@ -1,0 +1,142 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "CouplerMB_AM243",
+            "type": "ccs-debug",
+            "request": "launch",
+            "projectInfo": {
+                "name": "CouplerMB_AM243",
+                "resourceId": "/CouplerMB_AM243"
+            },
+            "connections": [
+                {
+                    "name": "Texas Instruments XDS110 USB Debug Probe",
+                    "cores": [
+                        {
+                            "name": "MAIN_Cortex_R5_0_0",
+                            "debuggerSettings": {
+                                "data": "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"no\" ?>\n<PropertyValues>\n\n  <property id=\"FlashFiles\">\n    <curValue></curValue>\n  </property>\n\n</PropertyValues>\n"
+                            }
+                        }
+                    ]
+                }
+            ]
+        },
+        {
+            "name": "ethercat_subdevice_webserver_demo_am243x-lp_r5fss0-0_freertos_ti-arm-clang",
+            "type": "ccs-debug",
+            "request": "launch",
+            "projectInfo": {
+                "name": "ethercat_subdevice_webserver_demo_am243x-lp_r5fss0-0_freertos_ti-arm-clang",
+                "resourceId": "/ethercat_subdevice_webserver_demo_am243x-lp_r5fss0-0_freertos_ti-arm-clang"
+            },
+            "connections": [
+                {
+                    "name": "Texas Instruments XDS110 USB Debug Probe",
+                    "cores": [
+                        {
+                            "name": "MAIN_Cortex_R5_0_0",
+                            "debuggerSettings": {
+                                "data": "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"no\" ?>\n<PropertyValues/>\n"
+                            }
+                        }
+                    ]
+                }
+            ]
+        },
+        {
+            "name": "CouplerEIP_AM243",
+            "type": "ccs-debug",
+            "request": "launch",
+            "projectInfo": {
+                "name": "CouplerEIP_AM243",
+                "resourceId": "/CouplerEIP_AM243"
+            },
+            "connections": [
+                {
+                    "name": "Texas Instruments XDS110 USB Debug Probe",
+                    "cores": [
+                        {
+                            "name": "MAIN_Cortex_R5_0_0",
+                            "debuggerSettings": {
+                                "data": "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"no\" ?>\n<PropertyValues>\n\n  <property id=\"FlashFiles\">\n    <curValue></curValue>\n  </property>\n\n</PropertyValues>\n"
+                            }
+                        }
+                    ]
+                }
+            ]
+        },
+        {
+            "name": "canfd_loopback_dma",
+            "type": "ccs-debug",
+            "request": "launch",
+            "projectInfo": {
+                "name": "canfd_loopback_dma",
+                "resourceId": "/canfd_loopback_dma"
+            }
+        },
+        {
+            "name": "S800-AM2434-r5fss0-0",
+            "type": "ccs-debug",
+            "request": "launch",
+            "projectInfo": {
+                "name": "S800-AM2434-r5fss0-0",
+                "resourceId": "/S800-AM2434-r5fss0-0"
+            },
+            "connections": [
+                {
+                    "name": "Texas Instruments XDS110 USB Debug Probe_0",
+                    "cores": [
+                        {
+                            "name": "MAIN_Cortex_R5_0_0",
+                            "debuggerSettings": {
+                                "data": "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"no\" ?>\n<PropertyValues/>\n"
+                            }
+                        }
+                    ]
+                }
+            ]
+        },
+        {
+            "name": "CANopen_AM243",
+            "type": "ccs-debug",
+            "request": "launch",
+            "projectInfo": {
+                "name": "CANopen_AM243",
+                "resourceId": "/CANopen_AM243"
+            },
+            "connections": [
+                {
+                    "name": "Texas Instruments XDS110 USB Debug Probe",
+                    "cores": [
+                        {
+                            "name": "MAIN_Cortex_R5_0_0",
+                            "debuggerSettings": {
+                                "data": "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"no\" ?>\n<PropertyValues>\n\n  <property id=\"FlashFiles\">\n    <curValue></curValue>\n  </property>\n\n</PropertyValues>\n"
+                            }
+                        }
+                    ]
+                }
+            ]
+        },
+        {
+            "name": "canfd_loopback_polling (1)",
+            "type": "ccs-debug",
+            "request": "launch",
+            "projectInfo": {
+                "name": "canfd_loopback_polling",
+                "resourceId": "/canfd_loopback_polling"
+            }
+        },
+        {
+            "name": "mcan_loopback_interrupt_am243x-lp_r5fss0-0_freertos_ti-arm-clang copy",
+            "type": "ccs-debug",
+            "request": "launch",
+            "projectInfo": {
+                "name": "mcan_loopback_interrupt_am243x-lp_r5fss0-0_freertos_ti-arm-clang copy",
+                "resourceId": "/mcan_loopback_interrupt_am243x-lp_r5fss0-0_freertos_ti-arm-clang copy"
+            }
+        }
+    ]
+}

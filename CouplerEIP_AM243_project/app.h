@@ -1,0 +1,127 @@
+/*!
+ *  \file app.h
+ *
+ *  \brief
+ *  Declarations of EtherNet/IP&trade; Adapter Example Application.
+ *
+ *  \author
+ *  Texas Instruments Incorporated
+ *
+ *  \copyright
+ *  Copyright (C) 2022-2025 Texas Instruments Incorporated
+ *
+ *  Redistribution and use in source and binary forms, with or without
+ *  modification, are permitted provided that the following conditions
+ *  are met:
+ *
+ *    Redistributions of source code must retain the above copyright
+ *    notice, this list of conditions and the following disclaimer.
+ *
+ *    Redistributions in binary form must reproduce the above copyright
+ *    notice, this list of conditions and the following disclaimer in the
+ *    documentation and/or other materials provided with the
+ *    distribution.
+ *
+ *    Neither the name of Texas Instruments Incorporated nor the names of
+ *    its contributors may be used to endorse or promote products derived
+ *    from this software without specific prior written permission.
+ *
+ *  THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
+ *  "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
+ *  LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
+ *  A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT
+ *  OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
+ *  SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
+ *  LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
+ *  DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
+ *  THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+ *  (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+ *  OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ */
+
+
+#ifndef APP_H
+#define APP_H
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+#define EI_APP_STACK_MAIN_TASK_STACK_SIZE_BYTE    0x1000
+#define EI_APP_STACK_MAIN_TASK_STACK_SIZE         (EI_APP_STACK_MAIN_TASK_STACK_SIZE_BYTE/sizeof(configSTACK_DEPTH_TYPE))
+
+#define APP_SCip_t EI_API_CIP_NODE_InitParams_t
+
+typedef struct APP_SApplication
+{
+    OSAL_TASK_Priority_t taskPrio;
+}APP_SApplication_t;
+
+typedef struct APP_SHwal
+{
+    OSAL_TASK_Priority_t taskPrioWatchDog;
+    OSAL_TASK_Priority_t taskPrioLicense;
+}APP_SHwal_t;
+
+typedef struct APP_SLwip
+{
+    OSAL_TASK_Priority_t taskPrio;
+}APP_SLwip_t;
+
+typedef struct APP_SAdapter
+{
+    OSAL_TASK_Priority_t taskPrioCyclicIo;
+    OSAL_TASK_Priority_t taskPrioPacket;
+    OSAL_TASK_Priority_t taskPrioStatistic;
+
+    OSAL_TASK_Priority_t taskPrioPtpDelayRqTx;      /* Task priority for TX Delay Request */
+    OSAL_TASK_Priority_t taskPrioPtpTxTimeStamp;    /* Task priority for TX Time Stamp P1 and P2 */
+    OSAL_TASK_Priority_t taskPrioPtpNRT;            /* Task priority for NRT */
+    OSAL_TASK_Priority_t taskPrioPtpBackground;     /* Task priority for Background thread */
+
+    OSAL_TASK_Priority_t taskPrioLldpReceive;       /* Task priority for receive thread */
+    uint16_t             lldpMaxNeighborDevices;    /* LLDP maximum neighbor devices */
+    uint32_t             timeSyncRxPhyLatency;      /* TimeSync RX PHY latency */
+    uint32_t             timeSyncTxPhyLatency;      /* TimeSync TX PHY latency */
+    uint32_t             timeSyncIEPClkFreq;        /* ICSS IEPClkFreq */
+}APP_SAdapter_t;
+
+typedef struct APP_SAcd
+{
+    uint16_t initialDelay;                          /* Delay for sending the first ARP probe on start */
+}APP_SAcd_t;
+
+typedef struct APP_SParams
+{
+    APP_SApplication_t         application;
+    APP_SHwal_t                hwal;
+    APP_SLwip_t                lwip;
+    APP_SCip_t                 cip;
+    APP_SAdapter_t             adapter;
+    DEVICE_PROFILE_NVM_SInit_t nv;                     /* Initialization parameters of non-volatile memory */
+    DEVICE_PROFILE_CFG_SInit_t config;                 /* Initialization parameters of non-volatile configuration data */
+    DRIVERS_SInit_t            drivers;
+    APP_SAcd_t                 acd;
+
+#if (defined CPU_LOAD_MONITOR) && (1==CPU_LOAD_MONITOR) || ((defined UART_CPU_LOAD_MONITOR) && (UART_CPU_LOAD_MONITOR==1))
+    CMN_CPU_API_SParams_t   cpuLoad;
+#endif
+#if (defined CPU_LOAD_MONITOR) && (1==CPU_LOAD_MONITOR)
+    WEB_SERVER_SParams_t    webServer;
+#endif
+}APP_SParams_t;
+
+typedef struct APP_SInstance
+{
+    APP_SParams_t                   config;
+
+    void*                           remoteHandle;
+}APP_SInstance_t;
+
+extern void EI_APP_TASK_main (void* pvTaskArg_p);
+
+#ifdef  __cplusplus
+}
+#endif
+
+#endif // APP_H

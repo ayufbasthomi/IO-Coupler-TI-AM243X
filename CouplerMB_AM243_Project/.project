@@ -1,0 +1,52 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<projectDescription>
+	<name>CouplerMB_AM243_Project</name>
+	<comment></comment>
+	<projects>
+	</projects>
+	<buildSpec>
+		<buildCommand>
+			<name>org.eclipse.cdt.managedbuilder.core.genmakebuilder</name>
+			<arguments>
+			</arguments>
+		</buildCommand>
+	</buildSpec>
+	<natures>
+		<nature>com.ti.ccstudio.core.ccsNature</nature>
+		<nature>org.eclipse.cdt.core.cnature</nature>
+		<nature>org.eclipse.cdt.managedbuilder.core.managedBuildNature</nature>
+		<nature>org.eclipse.cdt.core.ccnature</nature>
+	</natures>
+	<linkedResources>
+		<link>
+			<name>README.html</name>
+			<type>1</type>
+			<locationURI>INDUSTRIAL_COMMUNICATIONS_SDK_PATH/docs/api_guide_am243x/EXAMPLES_INDUSTRIAL_COMMS_MODBUS_DEMOS.html</locationURI>
+		</link>
+		<link>
+			<name>CANOpen_Master</name>
+			<type>2</type>
+			<location>C:/Users/ayuf/workspace_ccstheia/GSCoupler_AM243x_Project/CANopen_AM243_Project/CANOpen_Master</location>
+		</link>
+		<!-- <link>
+			<name>coupler_master</name>
+			<type>2</type>
+			<location>C:/Users/ayuf/workspace_ccstheia/GSCoupler_AM243x/CANopen_AM243/coupler_master</location>
+		</link>
+		<link>
+			<name>driver</name>
+			<type>2</type>
+			<location>C:/Users/ayuf/workspace_ccstheia/GSCoupler_AM243x/CANopen_AM243/driver</location>
+		</link> -->
+	</linkedResources>
+	<variableList>
+		<variable>
+			<name>INDUSTRIAL_COMMUNICATIONS_SDK_PATH</name>
+			<value>$%7BCOM_TI_INDUSTRIAL_COMMUNICATIONS_SDK_AM243X_INSTALL_DIR%7D</value>
+		</variable>
+		<variable>
+			<name>MCU_PLUS_SDK_PATH</name>
+			<value>$%7BCOM_TI_MCU_PLUS_SDK_AM243X_INSTALL_DIR%7D</value>
+		</variable>
+	</variableList>
+</projectDescription>

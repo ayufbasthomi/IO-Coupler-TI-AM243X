@@ -1,0 +1,40 @@
+
+------------------------------------------------------------------------------------------------------------------------
+!TASK: Migrating from source-tool 'Arm Compiler' (com.ti.ccstudio.buildDefinitions.TMS470_20.2.exe.compilerRelease.1098287746) ... [Sat Apr 18 01:54:27 WIB 2026]
+
+	!CONFIGURATION: 'Debug' (com.ti.ccstudio.buildDefinitions.TMS470.Release.192462669)
+
+		!TOOL: 'Arm Compiler' (com.ti.ccstudio.buildDefinitions.TMS470_TICLANG_4.0.exe.compilerRelease.499994736)
+
+			!NOTE: Source-tool default '--c89 --relaxed_ansi' was migrated to target-tool setting '-std=gnu90'
+
+			!NOTE: Source-tool default '--c++14 --relaxed_ansi' was migrated to target-tool setting '-std=gnu++14'
+
+			!NOTE: Source-tool default '--float_support=none' was migrated to target-tool setting '-mfloat-abi=soft'
+
+			!NOTE: Source-tool default '--endian=little' was migrated to target-tool setting '-mlittle-endian'
+
+			!NOTE: Source-tool default '--include_path=C:/Users/ekoba/workspace_ccstheia/CANopen_AM243/Debug/syscfg' was migrated to target-tool setting '-I"C:/Users/ekoba/workspace_ccstheia/CANopen_AM243/Debug/syscfg"'
+
+			!NOTE: Source-tool default '--define=_INLINE' was migrated to target-tool setting '-D_INLINE'
+
+			!NOTE: Source-tool default '-g' was migrated to target-tool setting '-gdwarf-3'
+
+			!NOTE: Source-tool default '--wchar_t=16' was migrated to target-tool setting '-fno-short-wchar'
+				tiarmclang does not support 16-bit wchar_t in its runtime libraries; the --wchar_t=16 option will map to tiarmclang's -fno-short-wchar option (32-bit wchar_t type assumed)
+
+			!NOTE: Source-tool default '--common=on' was migrated to target-tool setting '-fcommon'
+
+			!ERROR: Source-tool setting '-mv4' cannot be migrated
+				tiarmclang does not support specified processor (-mv4, -mv5e, -mv6, -mv7A8); tiarmclang does support cortex-m0, cortex-m3, cortex-m4, cortex-r4, cortex-r5, cortex-m33
+
+			!NOTE: Source-tool default '' was migrated to target-tool setting '-Werror=ti-pragmas -Werror=ti-macros -Werror=ti-intrinsics'
+				use of legacy TI pragmas will be flagged as errors
+				use of legacy TI pre-defined macro symbols will be flagged as errors
+				use of legacy TI intrinsics will be flagged as errors
+
+			!WARNING: The following source-tool settings were not migrated because no migration rules have been defined - please migrate these settings manually, if applicable: 
+					--diag_warning=225 --diag_wrap=off --display_error_number
+
+!END_TASK: [Sat Apr 18 01:54:27 WIB 2026]
+
