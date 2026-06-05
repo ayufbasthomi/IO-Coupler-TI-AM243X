@@ -130,6 +130,7 @@ pruicss1.$name                           = "CONFIG_PRU_ICSS1";
 pruicss1.AdditionalICSSSettings[0].$name = "CONFIG_PRU_ICSS_IO0";
 
 debug_log.enableLogZoneInfo = true;
+debug_log.enableCssLog      = false;
 
 mpu_armv71.$name        = "CONFIG_MPU_REGION0";
 mpu_armv71.size         = 31;

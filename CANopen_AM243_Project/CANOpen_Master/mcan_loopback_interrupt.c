@@ -1185,7 +1185,7 @@ void create_mcan_task(void)
     params.stack = (uint8_t *)gMcanTaskStack;
     params.stackSize = sizeof(gMcanTaskStack);
 
-    params.priority = 7;
+    params.priority = configMAX_PRIORITIES-1;
     params.taskMain = mcan_task;
     params.args = NULL;
 
