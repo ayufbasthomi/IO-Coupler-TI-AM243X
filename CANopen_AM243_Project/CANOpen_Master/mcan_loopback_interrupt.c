@@ -65,7 +65,13 @@ uint8_t AO_NODE_COUNT = 0;
 uint8_t AI_NODE_COUNT = 0;
 uint8_t gModuleCount = 0;
 
+#if CAN_RX_MODE == CAN_RX_MODE_INTERRUPT
+volatile uint32_t gCanRxPending = 0;
+static HwiP_Object gMcanHwiObject;
+#endif
+
 static CANopenModule* findModule(uint8_t nid);
+static void CANopen_onTPDO(MCAN_RxBufElement *rxMsg);
 
 /* ================= IO TYPE ================= */
 static uint8_t capability[MAX_NODES + 1];
@@ -133,6 +139,15 @@ static void App_mcanConfig(void)
     MCAN_config(gMcanBaseAddr, &configParams);
     MCAN_setBitTime(gMcanBaseAddr, &bitTimes);
     MCAN_msgRAMConfig(gMcanBaseAddr, &msgRAMConfigParams);
+    
+#if CAN_RX_MODE == CAN_RX_MODE_INTERRUPT
+    MCAN_enableIntr(gMcanBaseAddr, MCAN_INTR_MASK_ALL, (uint32_t)TRUE);
+    MCAN_enableIntr(gMcanBaseAddr, MCAN_INTR_SRC_RES_ADDR_ACCESS, (uint32_t)FALSE);
+    /* Select Interrupt Line 0 */
+    MCAN_selectIntrLine(gMcanBaseAddr, MCAN_INTR_MASK_ALL, MCAN_INTR_LINE_NUM_0);
+    /* Enable Interrupt Line */
+    MCAN_enableIntrLine(gMcanBaseAddr, MCAN_INTR_LINE_NUM_0, (uint32_t)TRUE);
+#endif
 
     /* ================= FILTER CONFIG ================= */
 
@@ -165,13 +180,87 @@ static void App_mcanConfig(void)
     while (MCAN_getOpMode(gMcanBaseAddr) != MCAN_OPERATION_MODE_NORMAL);
 }
 
+#if CAN_RX_MODE == CAN_RX_MODE_INTERRUPT
+static void App_mcanIntrISR(void *args)
+{
+    uint32_t intrStatus;
+
+    intrStatus =
+        MCAN_getIntrStatus(gMcanBaseAddr);
+
+    MCAN_clearIntrStatus(
+        gMcanBaseAddr,
+        intrStatus);
+
+    if(intrStatus & MCAN_INTR_SRC_RX_FIFO0_NEW_MSG)
+    {
+        gCanRxPending++;
+    }
+}
+
+static void canIntcfg(void)
+{
+    int32_t status;
+    HwiP_Params hwiPrms;
+
+    HwiP_Params_init(&hwiPrms);
+
+    hwiPrms.intNum   = APP_MCAN_INTR_NUM;
+    hwiPrms.callback = App_mcanIntrISR;
+
+    status = HwiP_construct(
+        &gMcanHwiObject,
+        &hwiPrms);
+
+    DebugP_assert(status == SystemP_SUCCESS);
+}
+#endif
+
+static void CANopen_processRxFIFO(void)
+{
+    if(sdo_in_progress)
+    {
+        return;
+    }
+    
+    MCAN_RxBufElement rxMsg;
+    MCAN_RxFIFOStatus fifoStatus;
+
+    fifoStatus.num = MCAN_RX_FIFO_NUM_0;
+
+    MCAN_getRxFIFOStatus(
+        gMcanBaseAddr,
+        &fifoStatus);
+
+    while(fifoStatus.fillLvl > 0)
+    {
+        MCAN_readMsgRam(
+            gMcanBaseAddr,
+            MCAN_MEM_TYPE_FIFO,
+            fifoStatus.getIdx,
+            fifoStatus.num,
+            &rxMsg);
+
+        MCAN_writeRxFIFOAck(
+            gMcanBaseAddr,
+            fifoStatus.num,
+            fifoStatus.getIdx);
+
+        CANopen_onTPDO(&rxMsg);
+
+        MCAN_getRxFIFOStatus(
+            gMcanBaseAddr,
+            &fifoStatus);
+    }
+}
+
 static int CANopen_sendFrame(uint32_t cobId, uint8_t dlc, const uint8_t *data)
 {
     MCAN_TxBufElement txMsg;
 
     if(xSemaphoreTake(gTxMutex, pdMS_TO_TICKS(100)) != pdTRUE)
     {
-        DebugP_log("[CAN TX] mutex timeout\r\n");
+        DEBUG_LOG("[CAN TX] mutex timeout\r\n");
         return -1;
     }
 
@@ -197,7 +286,7 @@ static int CANopen_sendFrame(uint32_t cobId, uint8_t dlc, const uint8_t *data)
     {
         xSemaphoreGive(gTxMutex);
 
-        DebugP_log(
+        DEBUG_LOG(
             "[CAN TX] no free tx buffer\r\n");
 
         return -2;
@@ -224,7 +313,7 @@ static int CANopen_sendFrame(uint32_t cobId, uint8_t dlc, const uint8_t *data)
         return -3;
     }
 
-    // DebugP_log(
+    // DEBUG_LOG(
     //     "[CAN TX] buf=%u cob=0x%03X\r\n",
     //     buf,
     //     cobId);
@@ -257,13 +346,13 @@ static void CANopen_updateDI(uint8_t nid, uint16_t value)
 
     if(m == NULL)
     {
-        DebugP_log(
+        DEBUG_LOG(
             "[DI UPDATE] Node=%u NOT FOUND\r\n",
             nid);
         return;
     }
 
-    DebugP_log(
+    DEBUG_LOG(
         "[DI UPDATE] Node=%u "
         "Type=%u "
         "DI=%u "
@@ -281,7 +370,7 @@ static void CANopen_updateDI(uint8_t nid, uint16_t value)
 
     gIOData.di[m->diIndex] = value;
 
-    DebugP_log(
+    DEBUG_LOG(
         "[DI STORE] gIOData.di[%u] = 0x%04X\r\n",
         m->diIndex,
         gIOData.di[m->diIndex]);
@@ -456,7 +545,7 @@ static int32_t CANopen_SDO_upload(uint8_t nodeId, uint16_t index, uint8_t subInd
                 (rxMsg.data[6] << 16) |
                 (rxMsg.data[7] << 24);
 
-            DebugP_log("[SDO] Abort: 0x%08X\r\n", abort_code);
+            DEBUG_LOG("[SDO] Abort: 0x%08X\r\n", abort_code);
 
             sdo_in_progress = 0;
             return -2;
@@ -471,7 +560,7 @@ static int32_t CANopen_SDO_upload(uint8_t nodeId, uint16_t index, uint8_t subInd
                 (rxMsg.data[6] << 16) |
                 (rxMsg.data[7] << 24);
 
-            DebugP_log("[SDO] OK value=0x%08X\r\n", *value);
+            DEBUG_LOG("[SDO] OK value=0x%08X\r\n", *value);
 
             sdo_in_progress = 0;
             return 0;
@@ -509,7 +598,7 @@ static void CANopen_sendNMT(uint8_t command, uint8_t nodeId)
         2,
         data);
 
-    DebugP_log("[NMT] Sent Cmd:0x%02X Node:%d\r\n", command, nodeId);
+    DEBUG_LOG("[NMT] Sent Cmd:0x%02X Node:%d\r\n", command, nodeId);
 }
 
 /* ================= AUTODISCOVER ================= */
@@ -523,7 +612,7 @@ static void CANopen_autodiscover(uint32_t timeout_per_node_ms)
     memset(discovered_nodes, 0, sizeof(discovered_nodes));
     node_count = 0;
 
-    DebugP_log("🔍 Active scanning nodes 1..32\r\n");
+    DEBUG_LOG("🔍 Active scanning nodes 1..32\r\n");
 
     for (uint8_t nid = 1; nid <= MAX_NODES; nid++)
     {
@@ -574,15 +663,15 @@ static void CANopen_autodiscover(uint32_t timeout_per_node_ms)
             discovered_nodes[nid] = 1;
             node_list[node_count++] = nid;
 
-            DebugP_log("✔ Node %d detected\r\n", nid);
+            DEBUG_LOG("✔ Node %d detected\r\n", nid);
         }
         else
         {
-            DebugP_log("✖ Node %d not found\r\n", nid);
+            DEBUG_LOG("✖ Node %d not found\r\n", nid);
         }
     }
 
-    DebugP_log("✔ Scan Done. Total nodes: %d\r\n", node_count);
+    DEBUG_LOG("✔ Scan Done. Total nodes: %d\r\n", node_count);
 }
 
 /* ================= DETECT IO TYPE ================= */
@@ -594,11 +683,11 @@ static uint8_t CANopen_detectCapability(uint8_t nodeId)
 
     if (ret != 0)
     {
-        DebugP_log("[CAP] Node %d → SDO FAIL\r\n", nodeId);
+        DEBUG_LOG("[CAP] Node %d → SDO FAIL\r\n", nodeId);
         return UNKNOWN;
     }
 
-    DebugP_log("[CAP] Node %d → ProductCode: 0x%08X\r\n",
+    DEBUG_LOG("[CAP] Node %d → ProductCode: 0x%08X\r\n",
                nodeId, product_code);
 
     switch (product_code)
@@ -612,7 +701,7 @@ static uint8_t CANopen_detectCapability(uint8_t nodeId)
         case 0x07: return RTDY;
         case 0x08: return RTDB;
         default:
-            DebugP_log("[CAP] UNKNOWN: 0x%08X\r\n", product_code);
+            DEBUG_LOG("[CAP] UNKNOWN: 0x%08X\r\n", product_code);
             return UNKNOWN;
     }
 }
@@ -636,7 +725,7 @@ static void CANopen_initNodeIfNeeded(uint8_t nid, uint8_t ioType)
 
     latestCanopenData[nid].initialized = 1;
 
-    DebugP_log("[INIT NODE] Node %d initialized\r\n", nid);
+    DEBUG_LOG("[INIT NODE] Node %d initialized\r\n", nid);
 }
 
 /* ================= ON TPDO ================= */
@@ -672,7 +761,7 @@ static void CANopen_onTPDO(MCAN_RxBufElement *rxMsg)
         case DI:
         {
             uint16_t val = raw[0] | (raw[1] << 8);
-            DebugP_log("[DI] ID %d, Value %d\r\n", nid, val);
+            DEBUG_LOG("[DI] ID %d, Value %d\r\n", nid, val);
             CANopen_updateDI(nid, val);
 
             break;
@@ -694,21 +783,28 @@ static void CANopen_onTPDO(MCAN_RxBufElement *rxMsg)
         case RTDY:
         case RTDB:
         {
-            if(pdo == 1)
+            if(tpdo_received[nid][0] &&
+            tpdo_received[nid][1])
             {
-                for(int i=0; i<4; i++)
+                if(type == AI_C ||
+                type == AI_V ||
+                type == RTDY ||
+                type == RTDB)
                 {
-                    latestCanopenData[nid].analog[i] = (int16_t)(raw[i*2] | (raw[i*2+1] << 8));
+                    CANopen_updateAI(
+                        nid,
+                        latestCanopenData[nid].analog);
                 }
-                tpdo_received[nid][0] = 1;
-            }
-            else
-            {
-                for(int i=0; i<4; i++)
+                else if(type == AO_C ||
+                        type == AO_V)
                 {
-                    latestCanopenData[nid].analog[i+4] = (int16_t)(raw[i*2] | (raw[i*2+1] << 8));
+                    CANopen_updateAO(
+                        nid,
+                        latestCanopenData[nid].analog);
                 }
-                tpdo_received[nid][1] = 1;
+
+                tpdo_received[nid][0] = 0;
+                tpdo_received[nid][1] = 0;
             }
 
             break;
@@ -722,7 +818,7 @@ static void CANopen_onTPDO(MCAN_RxBufElement *rxMsg)
 /* ================= WRITE RPDO ================= */
 int32_t CANopen_writeRPDO(uint8_t nodeId, uint16_t value)
 {
-    // DebugP_log(
+    // DEBUG_LOG(
     // "[RPDO SEND] node=%u value=%04X tick=%u\r\n",
     // nodeId,
     // value,
@@ -748,7 +844,7 @@ int32_t CANopen_writeRPDO(uint8_t nodeId, uint16_t value)
     txMsg.data[0] = value & 0xFF;
     txMsg.data[1] = (value >> 8) & 0xFF;
 
-    // DebugP_log("[TX RPDO] Node=%d COB=0x%03X Value=0x%04X\r\n", nodeId, cob, value);
+    // DEBUG_LOG("[TX RPDO] Node=%d COB=0x%03X Value=0x%04X\r\n", nodeId, cob, value);
 
     uint8_t data[2];
 
@@ -774,14 +870,14 @@ static void CANopen_sendInitialRPDOZero(uint8_t nodeId)
     /* Only reset OUTPUT devices */
     if (ioType == DO)
     {
-        DebugP_log("[RPDO INIT] DO Node %d → 0x0000\r\n", nodeId);
+        DEBUG_LOG("[RPDO INIT] DO Node %d → 0x0000\r\n", nodeId);
         CANopen_writeRPDO(nodeId, 0x0000);
     }
     else if (ioType == AO_C || ioType == AO_V)
     {
         int16_t zero[8] = {0};
 
-        DebugP_log("[RPDO INIT] AO Node %d → all 0\r\n", nodeId);
+        DEBUG_LOG("[RPDO INIT] AO Node %d → all 0\r\n", nodeId);
         CANopen_writeRPDO_Analog(nodeId, zero);
     }
 }
@@ -835,18 +931,18 @@ static CANopenModule* findModule(uint8_t nid)
 /* ================= INIT NETWORK ================= */
 static void CANopen_initNetwork(void)
 {
-    DebugP_log("=== CANopen INIT START ===\r\n");
+    DEBUG_LOG("=== CANopen INIT START ===\r\n");
     gIODataMutex = xSemaphoreCreateMutex();
     if(gIODataMutex == NULL)
     {
-        DebugP_log("Mutex create failed\r\n");
+        DEBUG_LOG("Mutex create failed\r\n");
         return;
     }
 
     gTxMutex = xSemaphoreCreateMutex();
     if(gTxMutex == NULL)
     {
-        DebugP_log("TX Mutex create failed\r\n");
+        DEBUG_LOG("TX Mutex create failed\r\n");
         return;
     }
 
@@ -870,7 +966,7 @@ static void CANopen_initNetwork(void)
     {
         uint8_t nid = node_list[i];
 
-        DebugP_log("\r\n[INIT] Node %d\r\n", nid);
+        DEBUG_LOG("\r\n[INIT] Node %d\r\n", nid);
 
         /* Step 2.1: Reset Communication */
         CANopen_sendNMT(0x82, nid);
@@ -880,7 +976,7 @@ static void CANopen_initNetwork(void)
         uint8_t cap = CANopen_detectCapability(nid);
         capability[nid] = cap;
 
-        DebugP_log("[INIT] Node %d Capability = %d\r\n", nid, cap);
+        DEBUG_LOG("[INIT] Node %d Capability = %d\r\n", nid, cap);
         
         /* Step 2.2: Set Operational */
         CANopen_sendNMT(0x01, nid);
@@ -919,125 +1015,10 @@ static void CANopen_initNetwork(void)
                 break;
         }
 
-        DebugP_log("[NMT] Node %d → Operational\r\n", nid);
+        DEBUG_LOG("[NMT] Node %d → Operational\r\n", nid);
     }
 
-    DebugP_log("=== CANopen INIT DONE ===\r\n");
-}
-
-static void CANopen_dumpNode(uint8_t nid)
-{
-    if(nid == 0 || nid > MAX_NODES)
-        return;
-
-    CANopenNodeData *n = &latestCanopenData[nid];
-
-    if(!n->initialized)
-        return;
-
-    DebugP_log(
-        "\r\n[NODE %u]"
-        "\r\n  Type      = %u"
-        "\r\n  Digital   = 0x%04X"
-        "\r\n  Analog    = [%d %d %d %d %d %d %d %d]"
-        "\r\n  HW        = %s"
-        "\r\n  FW        = %s"
-        "\r\n  State     = %s"
-        "\r\n  ErrType   = %u"
-        "\r\n  ErrCode   = %lu"
-        "\r\n",
-        nid,
-        n->ioType,
-        n->digital,
-        n->analog[0],
-        n->analog[1],
-        n->analog[2],
-        n->analog[3],
-        n->analog[4],
-        n->analog[5],
-        n->analog[6],
-        n->analog[7],
-        n->hwVer,
-        n->fwVer,
-        n->nodeState,
-        n->lastErrorType,
-        (unsigned long)n->lastErrorCode
-    );
-}
-
-static void CANopen_dumpModules(void)
-{
-    DebugP_log("\r\n===== MODULE MAP =====\r\n");
-
-    for(int i=0; i<gModuleCount; i++)
-    {
-        CANopenModule *m = &gModules[i];
-
-        DebugP_log(
-            "Slot=%d Node=%d Type=%d "
-            "DI=%d DO=%d AI=%d AO=%d\r\n",
-            i,
-            m->nodeId,
-            m->ioType,
-            m->diIndex,
-            m->doIndex,
-            m->aiIndex,
-            m->aoIndex
-        );
-    }
-
-    DebugP_log("======================\r\n");
-}
-
-static void CANopen_dumpIOData(void)
-{
-    DebugP_log("\r\n===== IO DATA =====\r\n");
-
-    for(int i=0; i<DI_NODE_COUNT; i++)
-    {
-        DebugP_log(
-            "DI[%d] = 0x%04X\r\n",
-            i,
-            gIOData.di[i]);
-    }
-
-    for(int i=0; i<DO_NODE_COUNT; i++)
-    {
-        DebugP_log(
-            "DO[%d] = 0x%04X\r\n",
-            i,
-            gIOData.do_[i]);
-    }
-
-    for(int i=0; i<AI_NODE_COUNT; i++)
-    {
-        DebugP_log(
-            "AI[%d] = [%d %d %d %d %d %d %d %d]\r\n",
-            i,
-            gIOData.ai[i*8+0],
-            gIOData.ai[i*8+1],
-            gIOData.ai[i*8+2],
-            gIOData.ai[i*8+3],
-            gIOData.ai[i*8+4],
-            gIOData.ai[i*8+5],
-            gIOData.ai[i*8+6],
-            gIOData.ai[i*8+7]);
-    }
-
-    for(int i=0; i<AO_NODE_COUNT; i++)
-    {
-        DebugP_log(
-            "AO[%d] = [%d %d %d %d %d %d %d %d]\r\n",
-            i,
-            gIOData.ao[i*8+0],
-            gIOData.ao[i*8+1],
-            gIOData.ao[i*8+2],
-            gIOData.ao[i*8+3],
-            gIOData.ao[i*8+4],
-            gIOData.ao[i*8+5],
-            gIOData.ao[i*8+6],
-            gIOData.ao[i*8+7]);
-    }
+    DEBUG_LOG("=== CANopen INIT DONE ===\r\n");
 }
 
 void ECAT_BuildModuleMapping(void)
@@ -1094,22 +1075,22 @@ void ECAT_BuildModuleMapping(void)
     gTxCount = tx;
     gRxCount = rx;
 
-    DebugP_log("\r\n===== ECAT TX PDO =====\r\n");
+    DEBUG_LOG("\r\n===== ECAT TX PDO =====\r\n");
 
     for(uint16_t i=0;i<gTxCount;i++)
     {
-        DebugP_log(
+        DEBUG_LOG(
             "TX Slot=%u Node=%u Type=%u\r\n",
             i,
             gTxModules[i].nodeId,
             gTxModules[i].ioType);
     }
 
-    DebugP_log("\r\n===== ECAT RX PDO =====\r\n");
+    DEBUG_LOG("\r\n===== ECAT RX PDO =====\r\n");
 
     for(uint16_t i=0;i<gRxCount;i++)
     {
-        DebugP_log(
+        DEBUG_LOG(
             "RX Slot=%u Node=%u Type=%u\r\n",
             i,
             gRxModules[i].nodeId,
@@ -1120,53 +1101,36 @@ void ECAT_BuildModuleMapping(void)
 /* ================= MAIN LOOP ================= */
 void mcan_main(void *args)
 {
-    MCAN_RxBufElement rxMsg;
-    MCAN_RxFIFOStatus fifoStatus;
-
     gMcanBaseAddr = (uint32_t) AddrTranslateP_getLocalAddr(APP_MCAN_BASE_ADDR);
 
     App_mcanConfig();
+#if CAN_RX_MODE == CAN_RX_MODE_INTERRUPT
+    canIntcfg();
+#endif
     CANopen_initNetwork();
     ECAT_BuildModuleMapping();
 
     while (1)
     {
-        static uint32_t lastDump = 0;
-        if((get_time_ms() - lastDump) > 1000)
-        {
-            DebugP_log("\r\n========================\r\n");
-
-            // CANopen_dumpModules();
-
-            // for(int i=1; i<=MAX_NODES; i++)
-            // {
-            //     CANopen_dumpNode(i);
-            // }
-
-            CANopen_dumpIOData();
-
-            lastDump = get_time_ms();
-        }
-
-        /* 1. Handle Modbus → CAN commands */
+#if CAN_RX_MODE == CAN_RX_MODE_POLLING
         CANopen_processCommandQueue();
 
-        /* 2. Handle CAN RX */
-        fifoStatus.num = MCAN_RX_FIFO_NUM_0;
-        MCAN_getRxFIFOStatus(gMcanBaseAddr, &fifoStatus);
+        CANopen_processRxFIFO();
+        
+        vTaskDelay(1);
+#endif
+#if CAN_RX_MODE == CAN_RX_MODE_INTERRUPT
+        CANopen_processCommandQueue();
 
-        while (fifoStatus.fillLvl > 0)
+        while(gCanRxPending)
         {
-            MCAN_readMsgRam(gMcanBaseAddr, MCAN_MEM_TYPE_FIFO, fifoStatus.getIdx, fifoStatus.num, &rxMsg);
+            gCanRxPending--;
 
-            MCAN_writeRxFIFOAck(gMcanBaseAddr, fifoStatus.num, fifoStatus.getIdx);
-
-            CANopen_onTPDO(&rxMsg);
-
-            MCAN_getRxFIFOStatus(gMcanBaseAddr, &fifoStatus);
+            CANopen_processRxFIFO();
         }
 
         vTaskDelay(1);
+#endif
     }
 }
 

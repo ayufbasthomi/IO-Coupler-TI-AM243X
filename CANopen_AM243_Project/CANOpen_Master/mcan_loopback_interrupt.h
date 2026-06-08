@@ -6,6 +6,25 @@
 #include "queue.h"
 #include "semphr.h"
 
+/* =========================================================
+ * Debug Configuration
+ * ========================================================= */
+#define ENABLE_DEBUG_LOG  0
+
+#if ENABLE_DEBUG_LOG
+    #define DEBUG_LOG(...) DebugP_log(__VA_ARGS__)
+#else
+    #define DEBUG_LOG(...)
+#endif
+
+#define CAN_RX_MODE_POLLING     0
+#define CAN_RX_MODE_INTERRUPT   1
+#define CAN_RX_MODE CAN_RX_MODE_INTERRUPT
+#define APP_MCAN_INTR_NUM       (CONFIG_MCAN0_INTR)
+
+/* =========================================================
+ * System Configuration
+ * ========================================================= */
 #define CANOPEN_OK 0
 #define APP_MCAN_BASE_ADDR       (CONFIG_MCAN0_BASE_ADDR)
 #define MAX_NODES 20
