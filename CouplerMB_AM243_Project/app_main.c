@@ -72,7 +72,6 @@
 /*                           Macros & Typedefs                                */
 /* ========================================================================== */
 #define MODBUSSLAVE_THREAD_STACKSIZE 1024
-#define MODBUSSLAVE_THREAD_PRIO 8
 // #define USE_DHCP
 /* ========================================================================== */
 /*                         Structure Declarations                             */
@@ -237,9 +236,9 @@ static void App_tcpipInitCompleteCb(void *pArg)
 
     sys_sem_signal(pSem);
 
-    MbsApp_startTcpServer();
-
     create_mcan_task();
+
+    MbsApp_startTcpServer();
 }
 
 static void App_setupNetif()

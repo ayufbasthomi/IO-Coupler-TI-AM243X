@@ -70,6 +70,16 @@ volatile uint32_t gCanRxPending = 0;
 static HwiP_Object gMcanHwiObject;
 #endif
 
+// uint8_t mb_do_nodes[MAX_NODES];
+// uint8_t mb_di_nodes[MAX_NODES];
+// uint8_t mb_ai_nodes[MAX_NODES];
+// uint8_t mb_ao_nodes[MAX_NODES];
+
+// uint16_t mb_do_count = 0;
+// uint16_t mb_di_count = 0;
+// uint16_t mb_ai_count = 0;
+// uint16_t mb_ao_count = 0;
+
 static CANopenModule* findModule(uint8_t nid);
 static void CANopen_onTPDO(MCAN_RxBufElement *rxMsg);
 
@@ -215,6 +225,200 @@ static void canIntcfg(void)
     DebugP_assert(status == SystemP_SUCCESS);
 }
 #endif
+
+#if COMM_TYPE == COMM_TYPE_ETHERCAT 
+void ECAT_BuildModuleMapping(void)
+{
+    uint16_t tx = 0;
+    uint16_t rx = 0;
+
+    memset(gTxModules, 0, sizeof(gTxModules));
+    memset(gRxModules, 0, sizeof(gRxModules));
+
+    for(uint8_t i=0; i<gModuleCount; i++)
+    {
+        CANopenModule *src = &gModules[i];
+
+        switch(src->ioType)
+        {
+            /* ============================= */
+            /* TxPDO                         */
+            /* ============================= */
+
+            case AI_C:
+            case AI_V:
+            case RTDY:
+            case RTDB:
+
+                gTxModules[tx++] = *src;
+                break;
+
+            case DI:
+
+                gTxModules[tx++] = *src;
+                break;
+
+            /* ============================= */
+            /* RxPDO                         */
+            /* ============================= */
+
+            case AO_C:
+            case AO_V:
+
+                gRxModules[rx++] = *src;
+                break;
+
+            case DO:
+
+                gRxModules[rx++] = *src;
+                break;
+
+            default:
+                break;
+        }
+    }
+
+    gTxCount = tx;
+    gRxCount = rx;
+
+    DEBUG_LOG("\r\n===== ECAT TX PDO =====\r\n");
+
+    for(uint16_t i=0;i<gTxCount;i++)
+    {
+        DEBUG_LOG(
+            "TX Slot=%u Node=%u Type=%u\r\n",
+            i,
+            gTxModules[i].nodeId,
+            gTxModules[i].ioType);
+    }
+
+    DEBUG_LOG("\r\n===== ECAT RX PDO =====\r\n");
+
+    for(uint16_t i=0;i<gRxCount;i++)
+    {
+        DEBUG_LOG(
+            "RX Slot=%u Node=%u Type=%u\r\n",
+            i,
+            gRxModules[i].nodeId,
+            gRxModules[i].ioType);
+    }
+}
+#elif COMM_TYPE == COMM_TYPE_MODBUSTCP
+// void MB_BuildMapping(void)
+// {
+//     mb_do_count = 0;
+//     mb_di_count = 0;
+//     mb_ai_count = 0;
+//     mb_ao_count = 0;
+
+//     for(uint16_t i=0; i<gModuleCount; i++)
+//     {
+//         switch(gModules[i].ioType)
+//         {
+//             case DO:
+//                 mb_do_nodes[mb_do_count++] =
+//                     gModules[i].nodeId;
+//                 break;
+
+//             case DI:
+//                 mb_di_nodes[mb_di_count++] =
+//                     gModules[i].nodeId;
+//                 break;
+
+//             case AI_C:
+//             case AI_V:
+//             case RTDY:
+//             case RTDB:
+//                 mb_ai_nodes[mb_ai_count++] =
+//                     gModules[i].nodeId;
+//                 break;
+
+//             case AO_C:
+//             case AO_V:
+//                 mb_ao_nodes[mb_ao_count++] =
+//                     gModules[i].nodeId;
+//                 break;
+
+//             default:
+//                 break;
+//         }
+//     }
+
+//     DebugP_log("\r\n=== MODBUS MAP ===\r\n");
+
+//     for(uint16_t i=0;i<mb_do_count;i++)
+//         DebugP_log("DO[%u] = Node %u\r\n", i, mb_do_nodes[i]);
+
+//     for(uint16_t i=0;i<mb_di_count;i++)
+//         DebugP_log("DI[%u] = Node %u\r\n", i, mb_di_nodes[i]);
+
+//     for(uint16_t i=0;i<mb_ai_count;i++)
+//         DebugP_log("AI[%u] = Node %u\r\n", i, mb_ai_nodes[i]);
+
+//     for(uint16_t i=0;i<mb_ao_count;i++)
+//         DebugP_log("AO[%u] = Node %u\r\n", i, mb_ao_nodes[i]);
+// }
+#endif
+
+CANopenModule* CANopen_findDO(uint16_t doIndex)
+{
+    for(uint16_t i = 0; i < gModuleCount; i++)
+    {
+        if(gModules[i].ioType == DO &&
+           gModules[i].doIndex == doIndex)
+        {
+            return &gModules[i];
+        }
+    }
+
+    return NULL;
+}
+
+CANopenModule* CANopen_findDI(uint16_t diIndex)
+{
+    for(uint16_t i = 0; i < gModuleCount; i++)
+    {
+        if(gModules[i].ioType == DI &&
+           gModules[i].diIndex == diIndex)
+        {
+            return &gModules[i];
+        }
+    }
+
+    return NULL;
+}
+
+CANopenModule* CANopen_findAI(uint16_t aiIndex)
+{
+    for(uint16_t i = 0; i < gModuleCount; i++)
+    {
+        if((gModules[i].ioType == AI_C ||
+            gModules[i].ioType == AI_V ||
+            gModules[i].ioType == RTDY ||
+            gModules[i].ioType == RTDB) &&
+            gModules[i].aiIndex == aiIndex)
+        {
+            return &gModules[i];
+        }
+    }
+
+    return NULL;
+}
+
+CANopenModule* CANopen_findAO(uint16_t aoIndex)
+{
+    for(uint16_t i = 0; i < gModuleCount; i++)
+    {
+        if((gModules[i].ioType == AO_C ||
+            gModules[i].ioType == AO_V) &&
+            gModules[i].aoIndex == aoIndex)
+        {
+            return &gModules[i];
+        }
+    }
+
+    return NULL;
+}
 
 static void CANopen_processRxFIFO(void)
 {
@@ -1021,83 +1225,6 @@ static void CANopen_initNetwork(void)
     DEBUG_LOG("=== CANopen INIT DONE ===\r\n");
 }
 
-void ECAT_BuildModuleMapping(void)
-{
-    uint16_t tx = 0;
-    uint16_t rx = 0;
-
-    memset(gTxModules, 0, sizeof(gTxModules));
-    memset(gRxModules, 0, sizeof(gRxModules));
-
-    for(uint8_t i=0; i<gModuleCount; i++)
-    {
-        CANopenModule *src = &gModules[i];
-
-        switch(src->ioType)
-        {
-            /* ============================= */
-            /* TxPDO                         */
-            /* ============================= */
-
-            case AI_C:
-            case AI_V:
-            case RTDY:
-            case RTDB:
-
-                gTxModules[tx++] = *src;
-                break;
-
-            case DI:
-
-                gTxModules[tx++] = *src;
-                break;
-
-            /* ============================= */
-            /* RxPDO                         */
-            /* ============================= */
-
-            case AO_C:
-            case AO_V:
-
-                gRxModules[rx++] = *src;
-                break;
-
-            case DO:
-
-                gRxModules[rx++] = *src;
-                break;
-
-            default:
-                break;
-        }
-    }
-
-    gTxCount = tx;
-    gRxCount = rx;
-
-    DEBUG_LOG("\r\n===== ECAT TX PDO =====\r\n");
-
-    for(uint16_t i=0;i<gTxCount;i++)
-    {
-        DEBUG_LOG(
-            "TX Slot=%u Node=%u Type=%u\r\n",
-            i,
-            gTxModules[i].nodeId,
-            gTxModules[i].ioType);
-    }
-
-    DEBUG_LOG("\r\n===== ECAT RX PDO =====\r\n");
-
-    for(uint16_t i=0;i<gRxCount;i++)
-    {
-        DEBUG_LOG(
-            "RX Slot=%u Node=%u Type=%u\r\n",
-            i,
-            gRxModules[i].nodeId,
-            gRxModules[i].ioType);
-    }
-}
-
 /* ================= MAIN LOOP ================= */
 void mcan_main(void *args)
 {
@@ -1108,7 +1235,12 @@ void mcan_main(void *args)
     canIntcfg();
 #endif
     CANopen_initNetwork();
+
+#if COMM_TYPE == COMM_TYPE_ETHERCAT
     ECAT_BuildModuleMapping();
+#elif COMM_TYPE == COMM_TYPE_MODBUSTCP
+    // MB_BuildMapping();
+#endif
 
     while (1)
     {

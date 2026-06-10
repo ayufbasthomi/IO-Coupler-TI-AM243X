@@ -20,6 +20,12 @@
 #define CAN_RX_MODE_POLLING     0
 #define CAN_RX_MODE_INTERRUPT   1
 #define CAN_RX_MODE CAN_RX_MODE_INTERRUPT
+
+#define COMM_TYPE_MODBUSTCP 0
+#define COMM_TYPE_ENIP 1
+#define COMM_TYPE_ETHERCAT 2
+#define COMM_TYPE COMM_TYPE_ETHERCAT
+
 #define APP_MCAN_INTR_NUM       (CONFIG_MCAN0_INTR)
 
 /* =========================================================
@@ -121,8 +127,22 @@ extern SemaphoreHandle_t gIODataMutex;
 extern QueueHandle_t gCanTxQueue;
 extern IO_DataModel gIOData;
 
+// extern uint8_t mb_do_nodes[MAX_NODES];
+// extern uint8_t mb_di_nodes[MAX_NODES];
+// extern uint8_t mb_ai_nodes[MAX_NODES];
+// extern uint8_t mb_ao_nodes[MAX_NODES];
+
+// extern uint16_t mb_do_count;
+// extern uint16_t mb_di_count;
+// extern uint16_t mb_ai_count;
+// extern uint16_t mb_ao_count;
+
 int32_t CANopen_writeRPDO(uint8_t nodeId, uint16_t value);
 int32_t CANopen_writeRPDO_Analog(uint8_t nodeId, int16_t values[8]);
 void ECAT_BuildModuleMapping(void);
+CANopenModule* CANopen_findDO(uint16_t doIndex);
+CANopenModule* CANopen_findDI(uint16_t diIndex);
+CANopenModule* CANopen_findAI(uint16_t aiIndex);
+CANopenModule* CANopen_findAO(uint16_t aoIndex);
 
 #endif

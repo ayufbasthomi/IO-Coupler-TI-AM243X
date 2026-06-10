@@ -52,7 +52,7 @@
 /*                            Global Variables                                */
 /* ========================================================================== */
 #define MODBUSSLAVE_THREAD_STACKSIZE 1024
-#define MODBUSSLAVE_THREAD_PRIO 8
+#define MODBUSSLAVE_THREAD_PRIO 31
 
 static TaskHandle_t ModbusServerTask;
 

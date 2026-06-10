@@ -55,11 +55,6 @@
 extern IO_DataModel gIOData;
 MbsDeviceChannelConfig mbs_app_deviceChannelConfig;
 
-extern uint8_t DI_NODES[MAX_NODES];
-extern uint8_t DO_NODES[MAX_NODES];
-extern uint8_t AO_NODES[MAX_NODES];
-extern uint8_t AI_NODES[MAX_NODES];
-
 extern uint8_t DI_NODE_COUNT;
 extern uint8_t DO_NODE_COUNT;
 extern uint8_t AO_NODE_COUNT;
@@ -78,14 +73,18 @@ static inline int nmbs_bitfield_get(const nmbs_bitfield bf, uint16_t index)
 
 nmbs_error MbsApp_read_coils(uint16_t address, uint16_t quantity, nmbs_bitfield coils_out, uint8_t unit_id, void* arg)
 {
-    printf("read_coils [%d] %d - %d\r\n", unit_id, address, quantity);
-    for (uint16_t i = 0; i < quantity; i++)
+    for(uint16_t i = 0; i < quantity; i++)
     {
         uint16_t idx = (address + i) / 16;
         uint8_t bit  = (address + i) % 16;
 
-        uint16_t val = gIOData.do_[idx];
+        if(idx >= DO_NODE_COUNT)
+        {
+            nmbs_bitfield_write(coils_out, i, 0);
+            continue;
+        }
 
+        uint16_t val = gIOData.do_[idx];
         uint8_t state = (val >> bit) & 0x01;
 
         nmbs_bitfield_write(coils_out, i, state);
@@ -108,28 +107,65 @@ nmbs_error MbsApp_write_single_coils(uint16_t address, bool value, uint8_t unit_
 
     gIOData.do_[idx] = current;
 
-    /* 🔥 Send to CAN */
-    CAN_TxMsg msg;
-    msg.type = 0;
-    msg.nodeId = DO_NODES[idx];
-    msg.value = current;
+    if(idx >= DO_NODE_COUNT)
+    {
+        return NMBS_ERROR_INVALID_ARGUMENT;
+    }
 
-    xQueueSend(gCanTxQueue, &msg, 0);
+    CANopenModule *m = CANopen_findDO(idx);
+
+    if(m == NULL)
+    {
+        return NMBS_ERROR_INVALID_ARGUMENT;
+    }
+
+    CANopen_writeRPDO(
+        m->nodeId,
+        current);
 
     return NMBS_ERROR_NONE;
 }
 
-nmbs_error MbsApp_write_multiple_coils(uint16_t address,
-                                       uint16_t quantity,
-                                       const nmbs_bitfield coils,
-                                       uint8_t unit_id,
-                                       void* arg)
+nmbs_error MbsApp_write_multiple_coils(
+    uint16_t address,
+    uint16_t quantity,
+    const nmbs_bitfield coils,
+    uint8_t unit_id,
+    void *arg)
 {
-    for (uint16_t i = 0; i < quantity; i++)
+    uint16_t startIdx = address / 16;
+    uint16_t endIdx   = (address + quantity - 1) / 16;
+
+    if(startIdx != endIdx)
     {
-        bool value = nmbs_bitfield_get(coils, i);
-        MbsApp_write_single_coils(address + i, value, unit_id, arg);
+        return NMBS_ERROR_INVALID_ARGUMENT;
     }
+
+    uint16_t value = gIOData.do_[startIdx];
+
+    for(uint16_t i=0; i<quantity; i++)
+    {
+        uint8_t bit = (address + i) % 16;
+
+        if(nmbs_bitfield_get(coils, i))
+            value |=  (1U << bit);
+        else
+            value &= ~(1U << bit);
+    }
+
+    gIOData.do_[startIdx] = value;
+
+    CANopenModule *m =
+        CANopen_findDO(startIdx);
+
+    if(m == NULL)
+    {
+        return NMBS_ERROR_INVALID_ARGUMENT;
+    }
+
+    CANopen_writeRPDO(
+        m->nodeId,
+        value);
 
     return NMBS_ERROR_NONE;
 }
@@ -141,8 +177,13 @@ nmbs_error MbsApp_read_discrete_input(uint16_t address, uint16_t quantity, nmbs_
         uint16_t idx = (address + i) / 16;
         uint8_t bit  = (address + i) % 16;
 
+        if(idx >= DI_NODE_COUNT)
+        {
+            nmbs_bitfield_write(inputs_out, i, 0);
+            continue;
+        }
+        
         uint16_t val = gIOData.di[idx];
-
         uint8_t state = (val >> bit) & 0x01;
 
         nmbs_bitfield_write(inputs_out, i, state);
@@ -151,11 +192,28 @@ nmbs_error MbsApp_read_discrete_input(uint16_t address, uint16_t quantity, nmbs_
     return NMBS_ERROR_NONE;
 }
 
-nmbs_error MbsApp_read_input_registers(uint16_t address, uint16_t quantity, uint16_t* registers_out, uint8_t unit_id, void* arg)
+nmbs_error MbsApp_read_input_registers(
+    uint16_t address,
+    uint16_t quantity,
+    uint16_t *registers_out,
+    uint8_t unit_id,
+    void *arg)
 {
-    for (uint16_t i = 0; i < quantity; i++)
+    for(uint16_t i = 0; i < quantity; i++)
     {
-        registers_out[i] = gIOData.ai[address + i];
+        uint16_t reg = address + i;
+
+        uint16_t module  = reg / 8;
+        uint16_t channel = reg % 8;
+
+        if(module >= AI_NODE_COUNT)
+        {
+            registers_out[i] = 0;
+            continue;
+        }
+
+        registers_out[i] =
+            (uint16_t)gIOData.ai[module * 8 + channel];
     }
 
     return NMBS_ERROR_NONE;
@@ -171,7 +229,7 @@ nmbs_error MbsApp_read_holding_registers(uint16_t address,
     {
         uint16_t idx = address + i;
 
-        if (idx >= (AO_NODE_COUNT * 8))
+        if(idx >= (AO_NODE_COUNT * 8))
         {
             registers_out[i] = 0;
             continue;
@@ -183,16 +241,15 @@ nmbs_error MbsApp_read_holding_registers(uint16_t address,
     return NMBS_ERROR_NONE;
 }
 
-nmbs_error MbsApp_write_single_registers(uint16_t address,
-                                         uint16_t value,
-                                         uint8_t unit_id,
-                                         void* arg)
+nmbs_error MbsApp_write_single_registers(uint16_t address, uint16_t value, uint8_t unit_id, void* arg)
 {
     uint16_t module = address / 8;
     uint16_t ch     = address % 8;
 
-    if (module >= AO_NODE_COUNT)
+    if(module >= AO_NODE_COUNT)
+    {
         return NMBS_ERROR_INVALID_ARGUMENT;
+    }
 
     int16_t buffer[8];
 
@@ -200,36 +257,73 @@ nmbs_error MbsApp_write_single_registers(uint16_t address,
 
     buffer[ch] = (int16_t)value;
 
-    CAN_TxMsg msg = {0};
-    msg.nodeId = AO_NODES[module];
-    msg.type   = 1;
+    CANopenModule *m =
+        CANopen_findAO(module);
 
-    memcpy(msg.analog, buffer, sizeof(buffer));
+    if(m == NULL)
+    {
+        return NMBS_ERROR_INVALID_ARGUMENT;
+    }
 
-    xQueueSend(gCanTxQueue, &msg, 0);
+    gIOData.ao[module * 8 + ch] = (int16_t)value;
+
+    CANopen_writeRPDO_Analog(m->nodeId, buffer);
 
     return NMBS_ERROR_NONE;
 }
 
-nmbs_error MbsApp_write_multiple_registers(uint16_t address, uint16_t quantity, const uint16_t* registers, uint8_t unit_id, void* arg)
+nmbs_error MbsApp_write_multiple_registers(
+    uint16_t address,
+    uint16_t quantity,
+    const uint16_t *registers,
+    uint8_t unit_id,
+    void *arg)
 {
-    uint16_t idx = address / 8;
+    uint16_t module = address / 8;
 
-    int16_t values[8] = {0};
-
-    for (int i = 0; i < quantity; i++)
+    if(module >= AO_NODE_COUNT)
     {
-        gIOData.ao[address + i] = registers[i];
-        values[i] = registers[i];
+        return NMBS_ERROR_INVALID_ARGUMENT;
     }
 
-    /* 🔥 Send to CAN */
-    CAN_TxMsg msg;
-    msg.type = 1;
-    msg.nodeId = AO_NODES[idx];
-    memcpy(msg.analog, values, sizeof(values));
+    if((address / 8) !=
+       ((address + quantity - 1) / 8))
+    {
+        return NMBS_ERROR_INVALID_ARGUMENT;
+    }
 
-    xQueueSend(gCanTxQueue, &msg, 0);
+    int16_t values[8];
+
+    memcpy(
+        values,
+        &gIOData.ao[module * 8],
+        sizeof(values));
+
+    for(uint16_t i=0; i<quantity; i++)
+    {
+        uint16_t ch =
+            (address + i) % 8;
+
+        values[ch] =
+            (int16_t)registers[i];
+    }
+
+    memcpy(
+        &gIOData.ao[module * 8],
+        values,
+        sizeof(values));
+
+    CANopenModule *m =
+        CANopen_findAO(module);
+
+    if(m == NULL)
+    {
+        return NMBS_ERROR_INVALID_ARGUMENT;
+    }
+
+    CANopen_writeRPDO_Analog(
+        m->nodeId,
+        values);
 
     return NMBS_ERROR_NONE;
 }
